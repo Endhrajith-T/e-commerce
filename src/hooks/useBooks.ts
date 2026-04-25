@@ -9,7 +9,7 @@ export default function useBooks() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/books")
+    fetch("/api/books", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {

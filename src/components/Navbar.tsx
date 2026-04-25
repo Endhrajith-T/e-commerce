@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCart } from "@/hooks/useCart";
 import { useToast } from "@/context/ToastContext";
 
 export default function Navbar() {
+  const pathname = usePathname();
+  if (pathname?.startsWith("/admin")) return null;
   const {
     cart,
     wishlist,

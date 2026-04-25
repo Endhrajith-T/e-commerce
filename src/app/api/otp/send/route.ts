@@ -51,9 +51,15 @@ export async function POST(req: NextRequest) {
     // Send OTP via SMS (logs to console if Twilio not configured)
     await sendOtpSms(phone, otp)
 
+    const isDev = process.env.NODE_ENV === 'development'
+
     return NextResponse.json({
       success: true,
-      message: 'OTP sent successfully',
+      message: isDev
+        ? `OTP generated (dev mode) — check terminal or use the otp field`
+        : 'OTP sent to your mobile number',
+      // Only expose OTP in development — NEVER in production
+      ...(isDev && { otp }),
     })
 
   } catch (err) {

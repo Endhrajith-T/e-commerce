@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   pending:   { bg: "#fef9c3", text: "#854d0e" },
@@ -15,27 +16,24 @@ const PAYMENT_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 export default function OrdersTable({ onStatusChange }: { onStatusChange?: () => void }) {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [updating, setUpdating] = useState<string | null>(null);
+  const [orders, setOrders]       = useState<any[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [filter, setFilter]       = useState("all");
+  const [page, setPage]           = useState(1);
+  const [total, setTotal]         = useState(0);
+  const [updating, setUpdating]   = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
+  // ── Fetch orders from API (for initial load + realtime trigger) ──
   const fetchOrders = useCallback(async () => {
-    setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page) });
       if (filter !== "all") params.set("status", filter);
-
-      const res = await fetch(`/api/admin/orders?${params}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
+      const res  = await fetch(`/api/admin/orders?${params}`, { credentials: "include", cache: "no-store" });
       const data = await res.json();
       if (data.success) {
         setOrders(data.data || []);
-        setTotal(data.total || 0);
+        setTotal(data.total  || 0);
       }
     } catch (e) {
       console.error(e);
@@ -44,41 +42,77 @@ export default function OrdersTable({ onStatusChange }: { onStatusChange?: () =>
     }
   }, [filter, page]);
 
+  // ── Initial fetch + Supabase Realtime subscription ──
   useEffect(() => {
+    setLoading(true);
     fetchOrders();
-    const interval = setInterval(fetchOrders, 30000);
-    return () => clearInterval(interval);
+
+    const channel = supabase
+      .channel("orders-admin-table")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
+        fetchOrders();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [fetchOrders]);
 
-  const updateStatus = async (id: string, status: string) => {
+  // ── Update status DIRECTLY via Supabase client (instant) ──
+  const updateStatus = async (id: string, newStatus: string) => {
+    const prevOrders = orders;
     setUpdating(id);
-    try {
-      await fetch(`/api/admin/orders/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ status }),
-      });
-      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+    setUpdateError(null);
+
+    // Optimistic update — instant UI change
+    setOrders((prev) => prev.map((o) => o.id === id ? { ...o, status: newStatus } : o));
+
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: newStatus })
+      .eq("id", id);
+
+    if (error) {
+      setOrders(prevOrders); // rollback
+      setUpdateError(`Save failed: ${error.message}`);
+    } else {
       onStatusChange?.();
-    } finally {
-      setUpdating(null);
+      // Send WhatsApp notification to customer (fire-and-forget)
+      if (newStatus !== "pending") {
+        fetch(`/api/admin/orders/${id}/notify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ status: newStatus }),
+        }).catch(() => {}); // silent fail — notification is best-effort
+      }
     }
+
+    setUpdating(null);
   };
 
   const totalPages = Math.ceil(total / 20);
 
   return (
     <div className="bg-[#fffdf7] border border-[#e5d9c5] p-5 rounded-xl">
+
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
         <div>
-          <h2 className="font-semibold text-lg">Orders</h2>
-          <p className="text-xs text-[#9A7230]">{total} total orders · auto-refreshes every 30s</p>
+          <h2 className="font-semibold text-lg">All Orders</h2>
+          <p className="text-xs text-[#9A7230]">
+            {total} total orders &nbsp;·&nbsp;
+            <span className="text-green-600 font-medium">● live</span>
+          </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col items-end gap-2">
+          {updateError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded-full">
+              ⚠️ {updateError}
+            </p>
+          )}
           <select
             value={filter}
-            onChange={(e) => { setFilter(e.target.value); setPage(1); }}
+            onChange={(e) => { setFilter(e.target.value); setPage(1); setUpdateError(null); }}
             className="border border-[#dac9b0] bg-white p-2 rounded text-sm"
           >
             <option value="all">All Orders</option>
@@ -87,21 +121,16 @@ export default function OrdersTable({ onStatusChange }: { onStatusChange?: () =>
             <option value="shipped">Shipped</option>
             <option value="delivered">Delivered</option>
           </select>
-          <button
-            onClick={fetchOrders}
-            className="border border-[#dac9b0] bg-white px-3 py-2 rounded text-sm hover:bg-[#f5ebdc]"
-          >
-            ↻ Refresh
-          </button>
         </div>
       </div>
 
+      {/* Table */}
       {loading ? (
         <div className="text-center py-8 text-[#9A7230]">Loading orders...</div>
       ) : orders.length === 0 ? (
         <div className="text-center py-8 text-[#9A7230]">
           <p className="text-2xl mb-2">📦</p>
-          <p>No orders found.</p>
+          <p>No orders yet.</p>
         </div>
       ) : (
         <>
@@ -136,7 +165,8 @@ export default function OrdersTable({ onStatusChange }: { onStatusChange?: () =>
                       <td className="py-3 pr-3 text-center">{order.quantity}</td>
                       <td className="py-3 pr-3 font-semibold">₹ {Number(order.total_amount).toLocaleString("en-IN")}</td>
                       <td className="py-3 pr-3">
-                        <span style={{ background: pc.bg, color: pc.text }} className="px-2 py-1 rounded-full text-xs font-medium uppercase">
+                        <span style={{ background: pc.bg, color: pc.text }}
+                          className="px-2 py-1 rounded-full text-xs font-medium uppercase">
                           {order.payment_method}
                         </span>
                       </td>
@@ -152,7 +182,7 @@ export default function OrdersTable({ onStatusChange }: { onStatusChange?: () =>
                           disabled={updating === order.id}
                           onChange={(e) => updateStatus(order.id, e.target.value)}
                           style={{ background: sc.bg, color: sc.text }}
-                          className="px-2 py-1 rounded-full text-xs font-medium border-0 cursor-pointer outline-none"
+                          className="px-2 py-1 rounded-full text-xs font-medium border-0 cursor-pointer outline-none disabled:opacity-60"
                         >
                           <option value="pending">Pending</option>
                           <option value="confirmed">Confirmed</option>

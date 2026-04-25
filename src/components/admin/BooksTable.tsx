@@ -42,8 +42,15 @@ export default function BooksTable() {
       const res = await fetch(`/api/admin/books/${id}`, { method: "DELETE", credentials: "include" });
       const data = await res.json();
       if (data.success) {
-        setBooks((prev) => prev.filter((b) => b.id !== id));
-        showMsg("Book deleted!");
+        if (data.message?.includes('out of stock')) {
+          // Book has orders — just mark as stock=0 in local state so it shows as "Hidden"
+          setBooks((prev) => prev.map((b) => b.id === id ? { ...b, stock: 0 } : b));
+          showMsg("Book hidden from store (has orders — set to out of stock)");
+        } else {
+          // Actually deleted
+          setBooks((prev) => prev.filter((b) => b.id !== id));
+          showMsg("Book deleted permanently!");
+        }
       } else {
         showMsg(data.error || "Cannot delete", true);
       }
@@ -144,8 +151,8 @@ export default function BooksTable() {
                     <td className="py-3 pr-3 text-[#70543a]">{book.author}</td>
                     <td className="py-3 pr-3 font-semibold">₹ {Number(book.price).toLocaleString("en-IN")}</td>
                     <td className="py-3 pr-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${book.stock <= 0 ? "bg-red-100 text-red-700" : book.stock <= 5 ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                        {book.stock <= 0 ? "Out of Stock" : `${book.stock} left`}
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${book.stock <= 0 ? "bg-gray-100 text-gray-500" : book.stock <= 5 ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                        {book.stock <= 0 ? "🚫 Hidden" : `${book.stock} left`}
                       </span>
                     </td>
                     <td className="py-3 text-right">
@@ -155,16 +162,21 @@ export default function BooksTable() {
                           className="text-xs border border-[#9A7230] text-[#9A7230] px-3 py-1 rounded hover:bg-[#fdf5e8]">
                           {editing === book.id ? "Cancel" : "Edit"}
                         </button>
-                        {/* Delete Button */}
+                        {/* Delete / Hide Button */}
                         {confirm === book.id ? (
                           <>
                             <button onClick={() => deleteBook(book.id)} disabled={deleting === book.id}
                               className="text-xs bg-red-600 text-white px-3 py-1 rounded disabled:opacity-50">
-                              {deleting === book.id ? "..." : "Confirm"}
+                              {deleting === book.id ? "..." : "Yes, Remove"}
                             </button>
                             <button onClick={() => setConfirm(null)}
                               className="text-xs border border-[#dac9b0] px-3 py-1 rounded">Cancel</button>
                           </>
+                        ) : book.stock <= 0 ? (
+                          <button onClick={() => setConfirm(book.id)}
+                            className="text-xs border border-gray-300 text-gray-500 px-3 py-1 rounded hover:bg-gray-50">
+                            Delete
+                          </button>
                         ) : (
                           <button onClick={() => setConfirm(book.id)}
                             className="text-xs border border-red-200 text-red-600 px-3 py-1 rounded hover:bg-red-50">

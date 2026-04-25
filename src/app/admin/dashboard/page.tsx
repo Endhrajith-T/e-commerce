@@ -7,6 +7,7 @@ import AddBookForm from "@/components/admin/AddBookForm";
 import BooksTable from "@/components/admin/BooksTable";
 import OrdersTable from "@/components/admin/OrdersTable";
 import { useAdminNotifications } from "@/hooks/useAdminNotifications";
+import { supabase } from "@/lib/supabase";
 
 // Stats Card
 function StatsCard({ title, value, subtitle, color = "#2E1E0F" }: any) {
@@ -101,8 +102,18 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 30000);
-    return () => clearInterval(interval);
+
+    // Supabase Realtime — re-fetch stats on any order change
+    const channel = supabase
+      .channel("orders-stats")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        () => { fetchStats(); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [fetchStats]);
 
   return (
