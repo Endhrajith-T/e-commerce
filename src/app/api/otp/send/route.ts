@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { checkRateLimit } from '@/lib/rateLimit'
+import { sendOtpSms } from '@/lib/msg91'
 
 function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
@@ -16,13 +18,18 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       )
 
+    const allowed = await checkRateLimit(phone)
+    if (!allowed)
+      return NextResponse.json(
+        { success: false, error: 'Too many OTP requests. Please wait an hour before retrying.' },
+        { status: 429 }
+      )
+
     const otp = generateOtp()
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString()
 
-    // Delete old OTPs
     await supabaseAdmin.from('otp_logs').delete().eq('phone', phone)
 
-    // Insert new OTP
     const { error } = await supabaseAdmin
       .from('otp_logs')
       .insert({
@@ -41,15 +48,15 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.log(`\n📱 OTP for ${phone}: ${otp}\n`)
+    // Send OTP via SMS (logs to console if Twilio not configured)
+    await sendOtpSms(phone, otp)
 
     return NextResponse.json({
       success: true,
       message: 'OTP sent successfully',
-      ...(process.env.NODE_ENV === 'development' && { otp }),
     })
 
-  } catch (err: any) {
+  } catch (err) {
     console.error('OTP send error:', err)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },

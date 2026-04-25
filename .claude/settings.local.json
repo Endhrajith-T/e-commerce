@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/2480364/NKBooks/e-commerce/.claude/worktrees/laughing-jennings-82fd02/src -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) -exec wc -l {} \\\\;)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

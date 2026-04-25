@@ -1,15 +1,3 @@
-<<<<<<< HEAD
-export type Book = {
-  id: string;
-  title: string;
-  author: string;
-  price: number;
-  board?: "CBSE" | "State Board" | "ICSE" | "Other" | string;
-  standard?: "9" | "10" | "11" | "12" | string;
-  image?: string;
-  description?: string;
-};
-=======
 export interface Book {
   id: string
   title: string
@@ -18,6 +6,8 @@ export interface Book {
   stock: number
   image_url: string | null
   description: string | null
+  board?: 'CBSE' | 'State Board' | 'ICSE' | 'Other' | string
+  standard?: '9' | '10' | '11' | '12' | string
   created_at: string
 }
 
@@ -41,8 +31,12 @@ export interface Order {
 }
 
 export interface CartItem {
-  book: Book
-  quantity: number
+  id: string
+  title: string
+  author: string
+  price: number
+  qty: number
+  image_url?: string | null
 }
 
 export interface CheckoutForm {
@@ -52,7 +46,7 @@ export interface CheckoutForm {
   pincode: string
 }
 
-export interface OtpSendRequest  { phone: string }
+export interface OtpSendRequest { phone: string }
 export interface OtpVerifyRequest { phone: string; otp: string }
 
 export interface CreateOrderRequest {
@@ -67,4 +61,3 @@ export interface CreateOrderRequest {
   razorpay_order_id?: string
   razorpay_payment_id?: string
 }
->>>>>>> 1f88fadfa101860d452cc9184545d231b97e8f43

@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { isAdminAuthenticated } from '@/lib/auth'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
+  if (!isAdminAuthenticated(req))
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status')
   const page = parseInt(searchParams.get('page') ?? '1')
@@ -15,7 +21,7 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false })
     .range(from, to)
 
-  if (status && status !== 'all' && ['pending','confirmed','shipped','delivered'].includes(status)) {
+  if (status && status !== 'all' && ['pending', 'confirmed', 'shipped', 'delivered'].includes(status)) {
     query = query.eq('status', status)
   }
 

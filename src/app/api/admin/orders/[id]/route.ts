@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { isAdminAuthenticated } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -7,6 +8,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  if (!isAdminAuthenticated(req))
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+
   try {
     const body = await req.json()
     const { status } = body
@@ -33,7 +37,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, data })
 
-  } catch (err: any) {
+  } catch (err) {
     console.error('Order update error:', err)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },

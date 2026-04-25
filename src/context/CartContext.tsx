@@ -29,7 +29,6 @@ export function CartProvider({ children }: any) {
 
   const addToCart = (item: any) => {
     const normalized = {
-      qty: 1,
       ...item,
       id: item.id ?? item.name,
       qty: item.qty ?? 1,

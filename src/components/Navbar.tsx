@@ -254,7 +254,7 @@ export default function Navbar() {
         <div className="chk-modal">
           <button className="chk-close" onClick={closeCheckout}>x</button>
           <div className="chk-title">Checkout</div><div className="chk-sub">Complete your order</div>
-          <div id="chk-order-summary">{checkoutRows.map((row) => <div className="chk-row" key={row.id}><span className="chk-lbl">{row.label}</span><span className="chk-val">₹ {row.price.toLocaleString("en-IN")}</span></div>)}<div className="chk-row"><span className="chk-lbl">Order Total</span><span className="chk-val chk-total">₹ {total.toLocaleString("en-IN")}</span></div></div>
+          <div id="chk-order-summary">{checkoutRows.map((row: { id: string; label: string; price: number }) => <div className="chk-row" key={row.id}><span className="chk-lbl">{row.label}</span><span className="chk-val">₹ {row.price.toLocaleString("en-IN")}</span></div>)}<div className="chk-row"><span className="chk-lbl">Order Total</span><span className="chk-val chk-total">₹ {total.toLocaleString("en-IN")}</span></div></div>
           <button className="chk-pay" onClick={placeOrder}>Place Order &amp; Pay</button>
         </div>
       </div>

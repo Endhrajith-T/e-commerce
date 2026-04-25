@@ -6,6 +6,7 @@ import AdminNavbar from "@/components/admin/AdminNavbar";
 import AddBookForm from "@/components/admin/AddBookForm";
 import BooksTable from "@/components/admin/BooksTable";
 import OrdersTable from "@/components/admin/OrdersTable";
+import { useAdminNotifications } from "@/hooks/useAdminNotifications";
 
 // Stats Card
 function StatsCard({ title, value, subtitle, color = "#2E1E0F" }: any) {
@@ -74,6 +75,8 @@ function StatusChart({ pending, confirmed, shipped, delivered }: any) {
 }
 
 export default function AdminDashboardPage() {
+  useAdminNotifications();
+
   const [stats, setStats] = useState({
     totalOrders: 0, todayOrders: 0,
     pendingOrders: 0, totalRevenue: 0,

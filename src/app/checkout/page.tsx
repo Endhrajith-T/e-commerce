@@ -89,7 +89,7 @@ export default function CheckoutPage() {
     if (!data.success) throw new Error(data.error || "Order failed");
     // Save order summary for success page
     const orderSummary = cart.map((item: any) => ({
-      book_title: item.name,
+      book_title: item.title,
       quantity: item.qty,
       total_amount: item.price * item.qty,
       payment_method: paymentMethod,

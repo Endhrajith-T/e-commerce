@@ -1,6 +1,5 @@
 import twilio from 'twilio'
 
-// ─── Helper ───────────────────────────────────────────────
 function getTwilioClient() {
   return twilio(
     process.env.TWILIO_ACCOUNT_SID!,
@@ -8,30 +7,31 @@ function getTwilioClient() {
   )
 }
 
+const WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886'
+
 // ─── OTP SMS to Customer ──────────────────────────────────
 export async function sendOtpSms(phone: string, otp: string): Promise<boolean> {
-  // Always log for dev
-  console.log(`\n📱 OTP for ${phone}: ${otp}\n`)
+  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_PHONE_NUMBER) {
+    console.log(`[DEV] OTP for ${phone}: ${otp}`)
+    return true
+  }
 
-  // Twilio SMS — uncomment for production
-  // try {
-  //   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-  //   const client = getTwilioClient()
-  //   await client.messages.create({
-  //     body: `Your NareshBookStore OTP is ${otp}. Valid for 5 minutes. Do not share.`,
-  //     from: process.env.TWILIO_PHONE_NUMBER!,
-  //     to: `+91${phone}`,
-  //   })
-  //   console.log(`✅ OTP SMS sent to ${phone}`)
-  // } catch (err) {
-  //   console.error('OTP SMS error:', err)
-  // }
-
-  return true
+  try {
+    const client = getTwilioClient()
+    await client.messages.create({
+      body: `Your NareshBookStore OTP is ${otp}. Valid for 5 minutes. Do not share this code.`,
+      from: process.env.TWILIO_PHONE_NUMBER!,
+      to: `+91${phone}`,
+    })
+    return true
+  } catch (err: any) {
+    console.error('OTP SMS error:', err?.message || err)
+    return false
+  }
 }
 
-// ─── Order SMS to Owner ───────────────────────────────────
-export async function sendOrderNotificationSms(order: {
+// ─── Order WhatsApp + SMS to Owner ───────────────────────
+export async function sendOrderNotificationToOwner(order: {
   customer_name: string
   phone: string
   book_title: string
@@ -42,55 +42,50 @@ export async function sendOrderNotificationSms(order: {
   pincode: string
 }): Promise<void> {
   const ownerPhone = process.env.OWNER_PHONE
-
-  const smsBody =
-    `📦 NEW ORDER - NareshBookStore!\n` +
-    `Customer: ${order.customer_name}\n` +
-    `Phone: ${order.phone}\n` +
-    `Book: ${order.book_title} x${order.quantity}\n` +
-    `Amount: Rs.${order.total_amount}\n` +
-    `Payment: ${order.payment_method.toUpperCase()}\n` +
-    `Address: ${order.address}, ${order.pincode}`
-
-  // Console log always
-  console.log(`\n${smsBody}\n`)
-
-  if (!ownerPhone) {
-    console.warn('⚠️ OWNER_PHONE not set in .env.local')
+  if (!ownerPhone || !process.env.TWILIO_ACCOUNT_SID) {
+    console.log('[DEV] New order (notifications skipped):', order.customer_name)
     return
   }
 
+  const body =
+    `📦 NEW ORDER — NareshBookStore!\n` +
+    `Customer: ${order.customer_name}\n` +
+    `Phone: ${order.phone}\n` +
+    `Book: ${order.book_title} ×${order.quantity}\n` +
+    `Amount: ₹${order.total_amount}\n` +
+    `Payment: ${order.payment_method.toUpperCase()}\n` +
+    `Address: ${order.address}, ${order.pincode}`
+
+  const client = getTwilioClient()
+  const to = `+91${ownerPhone}`
+
   try {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-    const client = getTwilioClient()
-
-    // ── Send SMS to Owner ──
     await client.messages.create({
-      body: smsBody,
+      body,
       from: process.env.TWILIO_PHONE_NUMBER!,
-      to: `+91${ownerPhone}`,
+      to,
     })
-    console.log(`✅ Order SMS sent to owner: ${ownerPhone}`)
-
-    // ── Send WhatsApp to Owner ──
-    // Twilio WhatsApp Sandbox: enable at twilio.com/console/sms/whatsapp/sandbox
-    // 1. Go to twilio.com/console/sms/whatsapp/sandbox
-    // 2. Send "join <your-sandbox-word>" from your WhatsApp to +14155238886
-    // 3. Uncomment below:
-
-    // await client.messages.create({
-    //   body: smsBody,
-    //   from: 'whatsapp:+14155238886',  // Twilio Sandbox number
-    //   to: `whatsapp:+91${ownerPhone}`,
-    // })
-    // console.log(`✅ Order WhatsApp sent to owner: ${ownerPhone}`)
-
+    console.log(`✅ Order SMS sent to owner`)
   } catch (err: any) {
-    console.error('❌ Notification error:', err?.message || err)
+    console.error('Owner SMS error:', err?.message || err)
+  }
+
+  // WhatsApp to owner
+  if (process.env.TWILIO_WHATSAPP_FROM) {
+    try {
+      await client.messages.create({
+        body,
+        from: WHATSAPP_FROM,
+        to: `whatsapp:${to}`,
+      })
+      console.log(`✅ Order WhatsApp sent to owner`)
+    } catch (err: any) {
+      console.error('Owner WhatsApp error:', err?.message || err)
+    }
   }
 }
 
-// ─── Order Confirmation SMS to Customer ──────────────────
+// ─── Order Confirmation to Customer (WhatsApp + SMS) ─────
 export async function sendOrderConfirmationToCustomer(
   phone: string,
   customerName: string,
@@ -98,22 +93,39 @@ export async function sendOrderConfirmationToCustomer(
   amount: number
 ): Promise<void> {
   const msg =
-    `Hi ${customerName}! Your order for "${bookTitle}" (Rs.${amount}) has been placed successfully at NareshBookStore. ` +
-    `We will contact you within 24 hours to confirm delivery. Thank you!`
+    `Hi ${customerName}! ✅ Your order for "${bookTitle}" (₹${amount}) is placed successfully at NareshBookStore. ` +
+    `We will contact you within 24 hours to confirm delivery. Track your order at our website.`
 
-  console.log(`\n📩 Customer confirmation for ${phone}: ${msg}\n`)
+  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_PHONE_NUMBER) {
+    console.log(`[DEV] Customer confirmation for ${phone}:`, msg)
+    return
+  }
 
-  // Uncomment for production:
-  // try {
-  //   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-  //   const client = getTwilioClient()
-  //   await client.messages.create({
-  //     body: msg,
-  //     from: process.env.TWILIO_PHONE_NUMBER!,
-  //     to: `+91${phone}`,
-  //   })
-  //   console.log(`✅ Confirmation SMS sent to customer: ${phone}`)
-  // } catch (err: any) {
-  //   console.error('Customer SMS error:', err?.message || err)
-  // }
+  const client = getTwilioClient()
+  const to = `+91${phone}`
+
+  try {
+    await client.messages.create({
+      body: msg,
+      from: process.env.TWILIO_PHONE_NUMBER!,
+      to,
+    })
+    console.log(`✅ Confirmation SMS sent to customer`)
+  } catch (err: any) {
+    console.error('Customer SMS error:', err?.message || err)
+  }
+
+  // WhatsApp to customer
+  if (process.env.TWILIO_WHATSAPP_FROM) {
+    try {
+      await client.messages.create({
+        body: msg,
+        from: WHATSAPP_FROM,
+        to: `whatsapp:${to}`,
+      })
+      console.log(`✅ Confirmation WhatsApp sent to customer`)
+    } catch (err: any) {
+      console.error('Customer WhatsApp error:', err?.message || err)
+    }
+  }
 }

@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { isAdminAuthenticated } from '@/lib/auth'
 
-export async function GET() {
-  // Admin sees ALL books — including out of stock
+export const dynamic = 'force-dynamic'
+
+export async function GET(req: NextRequest) {
+  if (!isAdminAuthenticated(req))
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+
   const { data, error } = await supabaseAdmin
     .from('books')
     .select('*')
-    .order('created_at', { ascending: false })  // NO stock filter here!
+    .order('created_at', { ascending: false })
 
   if (error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
@@ -18,6 +23,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!isAdminAuthenticated(req))
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+
   const body = await req.json()
   const { title, author, price, stock, image_url, description } = body
 

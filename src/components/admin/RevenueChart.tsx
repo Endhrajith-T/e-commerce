@@ -26,7 +26,7 @@ export default function RevenueChart() {
         <LineChart data={data}>
           <XAxis dataKey="month" stroke="#8f7a5e" tickLine={false} axisLine={false} />
           <YAxis stroke="#8f7a5e" tickLine={false} axisLine={false} />
-          <Tooltip formatter={(v: number) => `₹ ${v.toLocaleString("en-IN")}`} />
+          <Tooltip formatter={(v) => `₹ ${Number(v).toLocaleString("en-IN")}`} />
           <Line type="monotone" dataKey="revenue" stroke="#9A7230" strokeWidth={3} dot={{ r: 4, fill: "#9A7230" }} activeDot={{ r: 6 }} />
         </LineChart>
       </ResponsiveContainer>

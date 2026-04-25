@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { isAdminAuthenticated } from '@/lib/auth'
+
+export const dynamic = 'force-dynamic'
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  if (!isAdminAuthenticated(req))
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+
   const body = await req.json()
   const { title, author, price, stock, image_url, description } = body
 
@@ -29,9 +35,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json({ success: true, data })
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  if (!isAdminAuthenticated(req))
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+
   try {
-    // Check if book has orders
     const { data: orders } = await supabaseAdmin
       .from('orders')
       .select('id')
@@ -39,7 +47,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       .limit(1)
 
     if (orders && orders.length > 0) {
-      // Has orders — set stock to 0
       const { error } = await supabaseAdmin
         .from('books')
         .update({ stock: 0 })
@@ -51,7 +58,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ success: true, message: 'Book marked as out of stock' })
     }
 
-    // No orders — delete completely
     const { error } = await supabaseAdmin
       .from('books')
       .delete()
@@ -62,7 +68,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
     return NextResponse.json({ success: true, message: 'Book deleted successfully' })
 
-  } catch (err: any) {
+  } catch (err) {
     console.error('Delete error:', err)
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 })
   }
